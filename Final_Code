@@ -1,0 +1,213 @@
+import cv2
+import pyautogui as pg
+import numpy as np
+import math
+import time
+
+# Define the walk function
+def walk():
+    pg.keyDown("w")
+    time.sleep(0.003)
+    pg.keyUp("w")
+
+def left():
+    time.sleep(0.1)
+    pg.keyDown("w")
+    time.sleep(0.3)
+    pg.keyUp("w")
+    for _ in range(65):
+        x, y = pg.position()
+        x -= 10
+        pg.moveTo(x, y)
+    time.sleep(0.1)
+    pg.keyDown("w")
+    time.sleep(0.5)
+    pg.keyUp("w")
+
+def right():
+    walk()
+    for _ in range(65):
+        x, y = pg.position()
+        x += 10
+        pg.moveTo(x, y)
+    time.sleep(0.1)
+    pg.keyDown("w")
+    time.sleep(0.5)
+    pg.keyUp("w")
+
+# Define the align function for angle correction
+def align(angle, x, y):
+    if angle < 90:
+        x -= 1
+        pg.moveTo(x, y)
+    elif angle > 90:
+        x += 1
+        pg.moveTo(x, y)
+    return x, y
+
+def autocenter(center_x, center_y, screen_width=700, tolerance=10):
+    screen_center_x = screen_width // 2
+    offset = center_x - screen_center_x
+    if abs(offset) > tolerance:
+        if offset > 0:
+            pg.keyDown("a")
+            pg.keyUp("a")
+        else:
+            pg.keyDown("d")
+            pg.keyUp("d")
+
+# Define the region to capture: (left, top, width, height)
+region = (100, 100, 700, 500)
+mid = 300
+
+# Define HSV range for masking (keeping your original values)
+lower_hsv = np.array([0, 0, 0])
+upper_hsv = np.array([35, 255, 255])
+
+# Set pyautogui pause to reduce delay
+pg.PAUSE = 0.01
+
+# Initial delay to allow setup
+time.sleep(5)
+
+# Perform initial alignment
+screen = pg.screenshot(region=region)
+img = np.array(screen)
+img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+binary_mask = cv2.inRange(hsv, lower_hsv, upper_hsv)
+contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+for contour in contours:
+    area = cv2.contourArea(contour)
+    if 3000 < area < 400000:
+        rect = cv2.minAreaRect(contour)
+        (center_x, center_y), (width, height), angle = rect
+        if width < height:
+            angle = angle + 90
+        else:
+            angle = angle
+        x, y = pg.position()
+        x, y = align(angle, x, y)
+        break
+
+global aligned 
+oriented = False
+aligned = False
+
+while True:
+    # Capture screenshot of defined region
+    screen = pg.screenshot(region=region)
+    img = np.array(screen)
+    img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    binary_mask = cv2.inRange(hsv, lower_hsv, upper_hsv)
+
+    # Check pixel values at circle coordinates in the binary mask
+    pixel1 = binary_mask[50, 550]  # (y, x) for (550, 400)
+    pixel2 = binary_mask[50, 200]  # (y, x) for (200, 400)
+
+    # Apply Hough Lines Transform on the main image (img_bgr) with Gaussian Blur
+    hough_display = img_bgr.copy()  # Use the main image for display
+    # Apply Gaussian Blur to reduce noise
+    blurred = cv2.GaussianBlur(img_bgr, (5, 5), 0)  # Kernel size (5, 5), sigma=0
+    # Edge detection after Gaussian Blur
+    edges = cv2.Canny(blurred, 50, 150, apertureSize=3)
+    # Apply Hough Lines Transform
+    lines = cv2.HoughLines(edges, 1, np.pi / 180, threshold=100)  # Adjust threshold as needed
+    if lines is not None:
+        for rho, theta in lines[0]:
+            a = np.cos(theta)
+            b = np.sin(theta)
+            x0 = a * rho
+            y0 = b * rho
+            x1 = int(x0 + 1000 * (-b))
+            y1 = int(y0 + 1000 * (a))
+            x2 = int(x0 - 1000 * (-b))
+            y2 = int(y0 - 1000 * (a))
+            cv2.line(hough_display, (x1, y1), (x2, y2), (0, 0, 255), 2)  # Draw red lines
+
+    # Find contours in the binary mask
+    contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Create a copy of the original image to draw on
+    image_color = img_bgr.copy()
+
+    # Filter contours by area and process each qualifying contour
+    contour_found = False
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if 3000 < area < 100000:
+            contour_found = True
+            rect = cv2.minAreaRect(contour)
+            (center_x, center_y), (width, height), angle = rect
+
+            if width < height:
+                angle = angle + 90
+            else:
+                angle = angle
+
+            angle_from_vertical = angle
+            box = cv2.boxPoints(rect)
+            box = np.array(box, dtype=int)
+            cv2.drawContours(image_color, [box], 0, (0, 255, 0), 2)
+
+            if angle != 90:
+                aligned = False
+                x, y = pg.position()
+                x, y = align(angle, x, y)
+            if angle == 90:
+                aligned = True
+                if center_x > 440:
+                    print("Right")
+                    pg.keyDown("d")
+                    pg.keyUp("d")
+                    time.sleep(0.1)
+                elif center_x < 340:
+                    print("Left")
+                    pg.keyDown("a")
+                    pg.keyUp("a")
+                    time.sleep(0.1)
+                else:
+                    walk()
+
+            if center_x in range(320, 430):
+                oriented = True
+            else:
+                oriented = False
+            if aligned and oriented:
+                walk()
+
+            text = f"Angle: {angle_from_vertical:.2f} deg"
+            cv2.putText(image_color, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            break
+
+    if not contour_found:
+        if pixel1 != 0:
+            print("Turning Right")
+            right()
+        elif pixel2 != 0:
+            print("Turning Left")
+            left()
+        else:
+            walk()
+        print(pixel1, pixel2)
+        pg.keyUp("w")
+        cv2.putText(image_color, "No contours > 3000 px found", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+    # Draw circles on the pipeline image
+    cv2.circle(image_color, (550, 400), 10, (0, 255, 255), -1)  # Yellow circle
+    cv2.circle(image_color, (200, 400), 10, (0, 0, 255), -1)   # Red circle
+
+    # Show the binary mask
+    cv2.imshow("HSV Mask", binary_mask)
+    # Show the Hough Lines Transform result on the main image
+    cv2.imshow("Hough Lines", hough_display)
+    # Show the image with the bounding box, angle, and circles
+    cv2.imshow("Pipeline with Angle", image_color)
+
+    # Exit on 'q'
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cv2.destroyAllWindows()
