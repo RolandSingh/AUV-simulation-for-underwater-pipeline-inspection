@@ -1,90 +1,121 @@
 # AUV Simulation for Underwater Pipeline Inspection
 
-A computer-vision pipeline that detects corrosion, tracks it frame to frame, and steers a simulated AUV along a subsea pipeline — built entirely inside Minecraft, standing in for real underwater footage.
+A computer vision pipeline that detects corrosion, tracks it frame to frame, and steers a simulated AUV along a subsea pipeline, built entirely inside Minecraft as a substitute for real underwater footage.
 
-## Overview
+---
 
-Subsea pipeline inspection is usually done with divers or ROVs. Both are expensive, slow, and limited by depth and weather. AUVs are a cheaper, more scalable alternative — if they can perceive and follow a pipeline on their own.
+# Overview
 
-Testing that on a real AUV wasn't practical for a student project, so we built the pipeline and the underwater environment in Minecraft instead. A custom world with a corroded pipeline stood in for real subsea footage. We recorded runs, extracted frames, and trained vision models on them exactly as we would on real sensor data.
+Subsea pipeline inspection is usually carried out using divers or Remotely Operated Vehicles (ROVs). Both approaches are expensive, time-consuming, and limited by operating depth and weather conditions. Autonomous Underwater Vehicles (AUVs) provide a more scalable alternative, provided they can reliably perceive and follow underwater infrastructure.
 
-## How it works
+Testing such a system on a real AUV was not practical for this student project, so the underwater environment and pipeline were recreated inside Minecraft. A custom world containing a corroded pipeline served as a stand-in for real subsea footage. The recorded gameplay was converted into image sequences, which were then used to train and evaluate computer vision models in the same way as real underwater sensor data.
 
-The system runs two things off the same video feed:
+---
 
-1. **Corrosion detection and tracking.** YOLOv8s detects corrosion patches frame by frame. DeepSORT tracks each patch across frames, so the same corrosion spot keeps one ID instead of being re-detected as new.
-2. **Pipeline segmentation and navigation.** HSV thresholding isolates the pipeline from the background. A minimum-area rectangle fit to the resulting contour gives the pipeline's centerline and angle. `pyautogui` sends keyboard and mouse input to Minecraft to keep the character centered on and aligned with the pipe. A Hough line transform runs alongside it as a secondary edge check.
+# How it Works
 
-```mermaid
-flowchart LR
-    A[Minecraft simulation] --> B[Screen capture]
-    B --> C[HSV threshold + contour/angle fit]
-    C --> D[pyautogui control loop]
-    B --> E[YOLOv8s detection]
-    E --> F[DeepSORT tracking]
-    D --> G[Navigation + inspection output]
-    F --> G
-```
+The system processes the same video stream through two parallel pipelines.
 
-## Dataset
+## Corrosion Detection and Tracking
+
+YOLOv8s detects corrosion patches in each frame. DeepSORT then associates detections across consecutive frames so that each corrosion patch maintains a consistent identity instead of being detected as a new object in every frame.
+
+## Pipeline Segmentation and Navigation
+
+HSV thresholding is used to separate the pipeline from the background. A minimum-area rectangle is fitted to the segmented contour to estimate the pipeline centreline and orientation. These estimates are then used to generate keyboard and mouse inputs through `pyautogui`, allowing the simulated AUV to remain centred on and aligned with the pipeline. A Hough Line Transform runs alongside the segmentation process as an additional edge verification step.
+
+---
+
+# Dataset
 
 - 1,775 frames extracted from screen recordings of the simulated pipeline environment
-- Annotated in Roboflow, single class: `corrosion`
-- Augmented to ~3,500 images with ±15° rotation
-- Split 70 / 20 / 10 across train / validation / test
+- Annotated in Roboflow using a single class: **corrosion**
+- Augmented to approximately 3,500 images using ±15° rotations
+- Split into 70% training, 20% validation, and 10% testing
 
-## Training and results
+---
 
-YOLOv8s, 640×640 input, batch size 16, scheduled for 120 epochs and early-stopped at epoch 78. Recall at that point was around 0.50 — some corrosion patches were missed — while precision and mAP@0.5 held up well over the run, which is why training was cut there instead of running the full schedule.
+# Training and Results
 
-HSV segmentation held up well under consistent lighting, with occasional false positives where rust patches were close in hue to the background. DeepSORT kept stable IDs on tracked corrosion across frames, which is what let the navigation loop correct heading as a tracked patch drifted in-frame.
+The corrosion detector was trained using YOLOv8s with an input resolution of 640 × 640 pixels, a batch size of 16, and a scheduled training duration of 120 epochs. Early stopping was triggered at epoch 78. At that point, recall had reached approximately 0.50, indicating that some corrosion patches were still being missed, while precision and mAP@0.5 remained stable throughout training. Since additional epochs produced little improvement, training was stopped before completing the full schedule.
 
-## Repository contents
+HSV-based segmentation performed reliably under consistent lighting conditions, although occasional false positives occurred when rust regions closely matched the background colour. DeepSORT maintained stable identities for tracked corrosion patches across consecutive frames, allowing the navigation controller to adjust the vehicle heading as tracked defects moved through the field of view.
+
+---
+
+# Repository Contents
 
 | File | Description |
-|---|---|
-| `Final_Code` | Pipeline segmentation and navigation controller (HSV thresholding, contour/angle fitting, Hough lines, `pyautogui` control of Minecraft) |
-| `Demo_Sample.mp4` | Recording of a working navigation run |
-| `Trial_Error.mp4` | Recording of a run that hit one of the failure modes below |
-| `AUV simulation for underwater pipeline inspection.pdf` | Project slide deck — problem statement, methodology, dataset, results |
+|------|-------------|
+| `Final_Code.py` | Pipeline segmentation and navigation controller implementing HSV thresholding, contour and orientation estimation, Hough line detection, and `pyautogui` control for Minecraft |
+| `Demo_Sample.mp4` | Demonstration of a successful navigation run |
+| `Trial_Error.mp4` | Demonstration of a run exhibiting one of the identified failure cases |
+| `AUV simulation for underwater pipeline inspection.pdf` | Project presentation containing the problem statement, methodology, dataset, and results |
 | `NUS Report Work.pdf` | Internship report |
 
-YOLOv8s training and DeepSORT tracking were run separately (Roboflow-hosted training / a notebook not included here). Only the navigation controller ships as code in this repo.
+YOLOv8s training and DeepSORT tracking were performed separately using Roboflow-hosted training and external notebooks that are not included in this repository. This repository contains only the navigation controller.
 
-## Running `Final_Code`
+---
+
+# Running Final_Code
+
+Install the required dependencies:
 
 ```bash
 pip install opencv-python pyautogui numpy
 ```
 
-1. Open the Minecraft world with the constructed pipeline.
-2. Position the window so the pipeline sits inside the capture region hardcoded in the script — top-left corner at (100, 100), 700×500 px. Edit the `region` variable near the top of the file if your resolution or window placement differs.
-3. Run the script, then switch to the Minecraft window during the 5-second startup delay:
+Open the Minecraft world containing the constructed pipeline.
+
+Position the Minecraft window so that the pipeline lies within the screen capture region hardcoded in the script. The default capture region is:
+
+- Top-left corner: `(100, 100)`
+- Width: `700 px`
+- Height: `500 px`
+
+Modify the `region` variable near the beginning of `Final_Code.py` if your display resolution or window placement differs.
+
+Run the controller:
 
 ```bash
-python Final_Code
+python Final_Code.py
 ```
 
-4. Three OpenCV windows open live: the HSV binary mask, the Hough-line overlay, and the main view with the fitted bounding box and orientation angle. Press `q` in any window to stop.
+Switch to the Minecraft window during the five-second startup delay.
 
-`pyautogui` needs OS-level permission to read the screen and send input. On macOS, grant Accessibility and Screen Recording access. On Linux, it needs an X11 session — Wayland isn't supported.
+Three OpenCV windows will appear:
 
-## Limitations
+- HSV binary mask
+- Hough line overlay
+- Main view showing the fitted bounding box and pipeline orientation
 
-- The Minecraft–Python interface was unstable at times, noted in the project report as a compatibility issue between the game and the control script.
-- Some data was lost during frame collection and annotation.
-- HSV ranges and the capture region are tuned to one texture pack and one window position. Moving to a different setup means re-tuning both.
+Press **q** in any window to terminate the program.
 
-## Team
+---
 
-Built during a research internship at the National University of Singapore, June 2025, under the guidance of Dr. Amirhassan Monajemi.
+# Platform Notes
 
-Roland Singh, Ayush Upadhyay, Khushi J. H., Kirat Singh, Tarun Malathi Raja.
+`pyautogui` requires operating system permissions to capture the screen and send keyboard and mouse input.
 
-## References
+- **macOS:** Grant Accessibility and Screen Recording permissions.
+- **Linux:** An X11 session is required. Wayland is not currently supported.
 
-1. https://www.tandfonline.com/doi/full/10.1080/08839514.2022.2146853
-2. https://www.sciencedirect.com/science/article/pii/S2667143323000215
-3. https://link.springer.com/article/10.1007/s12559-024-10377-y
-4. https://www.sciencedirect.com/science/article/pii/S2352484723011502
-5. https://www.sciencedirect.com/science/article/pii/S2667143325000149
+---
+
+# Limitations
+
+- The interface between Python and Minecraft was occasionally unstable because of compatibility issues between the game and the automation script.
+- Some data was lost during frame extraction and annotation.
+- The HSV thresholds and screen capture region are tuned for a specific texture pack and window configuration. Different environments require recalibration of these parameters.
+
+---
+
+# Team
+
+This project was completed during a research internship at the **National University of Singapore (NUS)** in June 2025 under the guidance of **Dr. Amirhassan Monajemi**.
+
+- Roland Singh
+- Ayush Upadhyay
+- Khushi J. H.
+- Kirat Singh
+- Tarun Malathi Raja
