@@ -43,6 +43,16 @@ HSV-based segmentation performed reliably under consistent lighting conditions, 
 
 ---
 
+## Demo
+
+A demonstration of the complete pipeline is provided in the video below. The video shows the simulated AUV detecting corrosion, tracking it across frames, and autonomously following the underwater pipeline inside the Minecraft environment.
+
+https://github.com/user-attachments/assets/your-video-id
+
+If the embedded player is unavailable, the video can also be accessed directly:
+
+[**Demo_Sample.mp4**](Demo_Sample.mp4)
+
 # Repository Contents
 
 | File | Description |
